@@ -1,0 +1,10 @@
+#!/bin/bash
+# Update from original fork
+git remote add upstream https://github.com/openfaas/faas.git
+git fetch upstream
+git pull upstream master
+
+# Push back to clone version 
+git push origin master
+
+
