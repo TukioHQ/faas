@@ -11,13 +11,10 @@ import (
 	"net/http"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/openfaas/faas/gateway/metrics"
 	"github.com/openfaas/faas/gateway/types"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // functionMatcher parses out the service name (group 1) and rest of path (group 2).
@@ -31,11 +28,6 @@ const (
 	pathIndex    = 2 // pathIndex is the path i.e. /employee/:id/
 )
 
-// HTTPNotifier notify about HTTP request/response
-type HTTPNotifier interface {
-	Notify(method string, URL string, originalURL string, statusCode int, duration time.Duration)
-}
-
 // BaseURLResolver URL resolver for upstream requests
 type BaseURLResolver interface {
 	Resolve(r *http.Request) string
@@ -48,6 +40,12 @@ type URLPathTransformer interface {
 
 // MakeForwardingProxyHandler create a handler which forwards HTTP requests
 func MakeForwardingProxyHandler(proxy *types.HTTPClientReverseProxy, notifiers []HTTPNotifier, baseURLResolver BaseURLResolver, urlPathTransformer URLPathTransformer) http.HandlerFunc {
+
+	writeRequestURI := false
+	if _, exists := os.LookupEnv("write_request_uri"); exists {
+		writeRequestURI = exists
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		baseURL := baseURLResolver.Resolve(r)
 		originalURL := r.URL.String()
@@ -56,16 +54,19 @@ func MakeForwardingProxyHandler(proxy *types.HTTPClientReverseProxy, notifiers [
 
 		start := time.Now()
 
-		statusCode, err := forwardRequest(w, r, proxy.Client, baseURL, requestURL, proxy.Timeout)
+		statusCode, err := forwardRequest(w, r, proxy.Client, baseURL, requestURL, proxy.Timeout, writeRequestURI)
 
 		seconds := time.Since(start)
 		if err != nil {
 			log.Printf("error with upstream request to: %s, %s\n", requestURL, err.Error())
 		}
 
+		// defer func() {
 		for _, notifier := range notifiers {
 			notifier.Notify(r.Method, requestURL, originalURL, statusCode, seconds)
 		}
+		// }()
+
 	}
 }
 
@@ -94,14 +95,14 @@ func buildUpstreamRequest(r *http.Request, baseURL string, requestURL string) *h
 	return upstreamReq
 }
 
-func forwardRequest(w http.ResponseWriter, r *http.Request, proxyClient *http.Client, baseURL string, requestURL string, timeout time.Duration) (int, error) {
+func forwardRequest(w http.ResponseWriter, r *http.Request, proxyClient *http.Client, baseURL string, requestURL string, timeout time.Duration, writeRequestURI bool) (int, error) {
 
 	upstreamReq := buildUpstreamRequest(r, baseURL, requestURL)
 	if upstreamReq.Body != nil {
 		defer upstreamReq.Body.Close()
 	}
 
-	if _, exists := os.LookupEnv("write_request_uri"); exists {
+	if writeRequestURI {
 		log.Printf("forwardRequest: %s %s\n", upstreamReq.Host, upstreamReq.URL.String())
 	}
 
@@ -138,54 +139,6 @@ func copyHeaders(destination http.Header, source *http.Header) {
 		copy(vClone, v)
 		(destination)[k] = vClone
 	}
-}
-
-// PrometheusFunctionNotifier records metrics to Prometheus
-type PrometheusFunctionNotifier struct {
-	Metrics *metrics.MetricOptions
-}
-
-// Notify records metrics in Prometheus
-func (p PrometheusFunctionNotifier) Notify(method string, URL string, originalURL string, statusCode int, duration time.Duration) {
-	seconds := duration.Seconds()
-	serviceName := getServiceName(originalURL)
-
-	p.Metrics.GatewayFunctionsHistogram.
-		WithLabelValues(serviceName).
-		Observe(seconds)
-
-	code := strconv.Itoa(statusCode)
-
-	p.Metrics.GatewayFunctionInvocation.
-		With(prometheus.Labels{"function_name": serviceName, "code": code}).
-		Inc()
-}
-
-func getServiceName(urlValue string) string {
-	var serviceName string
-	forward := "/function/"
-	if strings.HasPrefix(urlValue, forward) {
-		// With a path like `/function/xyz/rest/of/path?q=a`, the service
-		// name we wish to locate is just the `xyz` portion.  With a postive
-		// match on the regex below, it will return a three-element slice.
-		// The item at index `0` is the same as `urlValue`, at `1`
-		// will be the service name we need, and at `2` the rest of the path.
-		matcher := functionMatcher.Copy()
-		matches := matcher.FindStringSubmatch(urlValue)
-		if len(matches) == hasPathCount {
-			serviceName = matches[nameIndex]
-		}
-	}
-	return strings.Trim(serviceName, "/")
-}
-
-// LoggingNotifier notifies a log about a request
-type LoggingNotifier struct {
-}
-
-// Notify a log about a request
-func (LoggingNotifier) Notify(method string, URL string, originalURL string, statusCode int, duration time.Duration) {
-	log.Printf("Forwarded [%s] to %s - [%d] - %f seconds", method, originalURL, statusCode, duration.Seconds())
 }
 
 // SingleHostBaseURLResolver resolves URLs against a single BaseURL

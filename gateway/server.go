@@ -10,12 +10,11 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/openfaas/faas/gateway/handlers"
-	"github.com/openfaas/faas/gateway/scaling"
-
 	"github.com/openfaas/faas-provider/auth"
+	"github.com/openfaas/faas/gateway/handlers"
 	"github.com/openfaas/faas/gateway/metrics"
 	"github.com/openfaas/faas/gateway/plugin"
+	"github.com/openfaas/faas/gateway/scaling"
 	"github.com/openfaas/faas/gateway/types"
 	natsHandler "github.com/openfaas/nats-queue-worker/handler"
 )
@@ -58,14 +57,18 @@ func main() {
 	exporter.StartServiceWatcher(*config.FunctionsProviderURL, metricsOptions, "func", servicePollInterval)
 	metrics.RegisterExporter(exporter)
 
-	reverseProxy := types.NewHTTPClientReverseProxy(config.FunctionsProviderURL, config.UpstreamTimeout)
+	reverseProxy := types.NewHTTPClientReverseProxy(config.FunctionsProviderURL, config.UpstreamTimeout, config.MaxIdleConns, config.MaxIdleConnsPerHost)
 
 	loggingNotifier := handlers.LoggingNotifier{}
 	prometheusNotifier := handlers.PrometheusFunctionNotifier{
 		Metrics: &metricsOptions,
 	}
+	prometheusServiceNotifier := handlers.PrometheusServiceNotifier{
+		ServiceMetrics: metricsOptions.ServiceMetrics,
+	}
+
 	functionNotifiers := []handlers.HTTPNotifier{loggingNotifier, prometheusNotifier}
-	forwardingNotifiers := []handlers.HTTPNotifier{loggingNotifier}
+	forwardingNotifiers := []handlers.HTTPNotifier{loggingNotifier, prometheusServiceNotifier}
 
 	urlResolver := handlers.SingleHostBaseURLResolver{BaseURL: config.FunctionsProviderURL.String()}
 	var functionURLResolver handlers.BaseURLResolver
@@ -89,19 +92,35 @@ func main() {
 	faasHandlers.UpdateFunction = handlers.MakeForwardingProxyHandler(reverseProxy, forwardingNotifiers, urlResolver, nilURLTransformer)
 	faasHandlers.QueryFunction = handlers.MakeForwardingProxyHandler(reverseProxy, forwardingNotifiers, urlResolver, nilURLTransformer)
 	faasHandlers.InfoHandler = handlers.MakeInfoHandler(handlers.MakeForwardingProxyHandler(reverseProxy, forwardingNotifiers, urlResolver, nilURLTransformer))
+	faasHandlers.SecretHandler = handlers.MakeForwardingProxyHandler(reverseProxy, forwardingNotifiers, urlResolver, nilURLTransformer)
 
 	alertHandler := plugin.NewExternalServiceQuery(*config.FunctionsProviderURL, credentials)
-	faasHandlers.Alert = handlers.MakeAlertHandler(alertHandler)
+	faasHandlers.Alert = handlers.MakeNotifierWrapper(
+		handlers.MakeAlertHandler(alertHandler),
+		forwardingNotifiers,
+	)
 
 	if config.UseNATS() {
 		log.Println("Async enabled: Using NATS Streaming.")
-		natsQueue, queueErr := natsHandler.CreateNatsQueue(*config.NATSAddress, *config.NATSPort, natsHandler.DefaultNatsConfig{})
+		maxReconnect := 60
+		interval := time.Second * 2
+
+		defaultNATSConfig := natsHandler.NewDefaultNATSConfig(maxReconnect, interval)
+
+		natsQueue, queueErr := natsHandler.CreateNATSQueue(*config.NATSAddress, *config.NATSPort, defaultNATSConfig)
 		if queueErr != nil {
 			log.Fatalln(queueErr)
 		}
 
-		faasHandlers.QueuedProxy = handlers.MakeCallIDMiddleware(handlers.MakeQueuedProxy(metricsOptions, true, natsQueue, functionURLTransformer))
-		faasHandlers.AsyncReport = handlers.MakeAsyncReport(metricsOptions)
+		faasHandlers.QueuedProxy = handlers.MakeNotifierWrapper(
+			handlers.MakeCallIDMiddleware(handlers.MakeQueuedProxy(metricsOptions, true, natsQueue, functionURLTransformer)),
+			forwardingNotifiers,
+		)
+
+		faasHandlers.AsyncReport = handlers.MakeNotifierWrapper(
+			handlers.MakeAsyncReport(metricsOptions),
+			forwardingNotifiers,
+		)
 	}
 
 	prometheusQuery := metrics.NewPrometheusQuery(config.PrometheusHost, config.PrometheusPort, &http.Client{})
@@ -111,6 +130,8 @@ func main() {
 	faasHandlers.ScaleFunction = handlers.MakeForwardingProxyHandler(reverseProxy, forwardingNotifiers, urlResolver, nilURLTransformer)
 
 	if credentials != nil {
+		faasHandlers.Alert =
+			auth.DecorateWithBasicAuth(faasHandlers.Alert, credentials)
 		faasHandlers.UpdateFunction =
 			auth.DecorateWithBasicAuth(faasHandlers.UpdateFunction, credentials)
 		faasHandlers.DeleteFunction =
@@ -127,6 +148,8 @@ func main() {
 			auth.DecorateWithBasicAuth(faasHandlers.InfoHandler, credentials)
 		faasHandlers.AsyncReport =
 			auth.DecorateWithBasicAuth(faasHandlers.AsyncReport, credentials)
+		faasHandlers.SecretHandler =
+			auth.DecorateWithBasicAuth(faasHandlers.SecretHandler, credentials)
 	}
 
 	r := mux.NewRouter()
@@ -160,12 +183,14 @@ func main() {
 	r.HandleFunc("/system/functions", faasHandlers.UpdateFunction).Methods(http.MethodPut)
 	r.HandleFunc("/system/scale-function/{name:[-a-zA-Z_0-9]+}", faasHandlers.ScaleFunction).Methods(http.MethodPost)
 
+	r.HandleFunc("/system/secrets", faasHandlers.SecretHandler).Methods(http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete)
+
 	if faasHandlers.QueuedProxy != nil {
 		r.HandleFunc("/async-function/{name:[-a-zA-Z_0-9]+}/", faasHandlers.QueuedProxy).Methods(http.MethodPost)
 		r.HandleFunc("/async-function/{name:[-a-zA-Z_0-9]+}", faasHandlers.QueuedProxy).Methods(http.MethodPost)
 		r.HandleFunc("/async-function/{name:[-a-zA-Z_0-9]+}/{params:.*}", faasHandlers.QueuedProxy).Methods(http.MethodPost)
 
-		r.HandleFunc("/system/async-report", faasHandlers.AsyncReport)
+		r.HandleFunc("/system/async-report", handlers.MakeNotifierWrapper(faasHandlers.AsyncReport, forwardingNotifiers))
 	}
 
 	fs := http.FileServer(http.Dir("./assets/"))

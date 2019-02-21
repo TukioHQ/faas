@@ -253,6 +253,87 @@ paths:
           description: Not Found
         '500':
           description: Internal Server Error
+  '/system/secrets':
+    get:
+      summary: 'Get a list of secret names and metadata from the provider'
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        '200':
+          description: List of submitted secrets.
+          schema:
+            type: array
+            items:
+              $ref: '#/definitions/Secret'
+    post:
+      summary: Create a new secret.
+      description: ''
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: body
+        name: body
+        description: A new secret to create
+        required: true
+        schema:
+          $ref: '#/definitions/Secret'
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Bad Request
+        '500':
+          description: Internal Server Error
+    put:
+      summary: Update a secret.
+      description: ''
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: body
+        name: body
+        description: Secret to update
+        required: true
+        schema:
+          $ref: '#/definitions/Secret'
+      responses:
+        '200':
+          description: Ok
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error
+    delete:
+      summary: Remove a secret.
+      description: ''
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: body
+        name: body
+        description: Secret to delete
+        required: true
+        schema:
+          $ref: '#/definitions/Secret'
+      responses:
+        '204':
+          description: OK
+        '400':
+          description: Bad Request
+        '404':
+          description: Not Found
+        '500':
+          description: Internal Server Error
   '/system/info':
     get:
       summary: Get info such as provider version number and provider orchestrator
@@ -363,15 +444,20 @@ definitions:
           description: Constraints are specific to OpenFaaS Provider
           example: "node.platform.os == linux"
       labels:
-        description: An array of labels used by the back-end for making scheduling or routing decisions
-        type: array
-        items:
+        description: A map of labels for making scheduling or routing decisions
+        type: object
+        additionalProperties:
           type: string
+        example:
+          foo: bar
       annotations:
-        description: An array of annotations used by the back-end for management, orchestration, events and build tasks
-        type: array
-        items:
+        description: A map of annotations for management, orchestration, events and build tasks
+        type: object
+        additionalProperties:
           type: string
+        example:
+          topics: awesome-kafka-topic
+          foo: bar
       secrets:
         type: array
         items:
@@ -402,6 +488,9 @@ definitions:
           cpu:
             type: string
             example: "0.01"
+      readOnlyRootFilesystem:
+        type: boolean
+        description: Make the root filesystem of the function read-only
     required:
     - service
     - image
@@ -437,13 +526,20 @@ definitions:
         type: string
         example: node main.js
       labels:
+        description: A map of labels for making scheduling or routing decisions
         type: object
         additionalProperties:
           type: string
+        example:
+          foo: bar
       annotations:
+        description: A map of annotations for management, orchestration, events and build tasks
         type: object
         additionalProperties:
           type: string
+        example:
+          topics: awesome-kafka-topic
+          foo: bar
     required:
     - name
     - image
@@ -452,6 +548,19 @@ definitions:
     - availableReplicas
     - envProcess
     - labels
+  Secret:
+    type: object
+    properties:
+      name:
+        type: string
+        description: Name of secret
+        example: aws-key
+      value:
+        type: string
+        description: Value of secret in plain-text
+        example: changeme
+    required:
+    - name
 externalDocs:
   description: More documentation available on Github
   url: 'https://github.com/openfaas/faas'

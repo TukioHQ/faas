@@ -26,11 +26,16 @@ OpenFaaS&reg; (Functions as a Service) is a framework for building Serverless fu
 
 ### Press / Branding / Sponsors
 
-For information on branding, the press-kit, registered entities and sponsorship head over to the [openfaas/media](https://github.com/openfaas/media/blob/master/README.md) repo. You can also order custom SWAG or take part in the weekly Twitter contest [#FaaSFriday](https://twitter.com/search?q=faasfriday&src=typd)
+* Press / Branding
 
-Looking for statistics? This project does not use a mono-repo, but is split across several components. Use [Ken Fukuyama's dashboard](https://kenfdev.o6s.io/github-stats-page) to gather accurate counts on contributors, stars and forks across the [GitHub organisation](https://github.com/openfaas).
+  For information on branding, the press-kit, registered entities and sponsorship head over to the [openfaas/media](https://github.com/openfaas/media/blob/master/README.md) repo. You can also order custom SWAG or take part in the weekly Twitter contest [#FaaSFriday](https://twitter.com/search?q=faasfriday&src=typd)
 
-Incubator projects are not counted in these totals and are hosted under [openfaas-incubator](https://github.com/openfaas-incubator) awaiting graduation.
+* Looking for statistics? This project does not use a mono-repo, but is split across several components. Use [Ken Fukuyama's dashboard](https://kenfdev.o6s.io/github-stats-page) to gather accurate counts on contributors, stars and forks across the [GitHub organisation](https://github.com/openfaas).
+
+  > Note: Incubator projects are not counted in these totals and are hosted under [openfaas-incubator](https://github.com/openfaas-incubator) awaiting graduation.
+
+* Support for OpenFaaS
+  OpenFaaS is free to use and completely open source under the MIT license. You can donate to the project to fund its ongoing development or become a sponsor. [Support OpenFaaS](https://www.openfaas.com/donate/)
 
 ### Governance
 
@@ -142,21 +147,23 @@ Here is a screenshot of the API gateway portal - designed for ease of use.
 
 ## Find out more about OpenFaaS
 
-### The Cube interview @ DevNet Create 2018
+### Digital Transformation of Vision Banco Paraguay with Serverless Functions @ KubeCon late-2018
+
+[HD video co-presenting at KubeCon with Patricio Diaz Senior Analyst, Vision Banco SAECA](https://kccna18.sched.com/event/GraO/digital-transformation-of-vision-banco-paraguay-with-serverless-functions-alex-ellis-vmware-patricio-diaz-vision-banco-saeca)
+
+### Serverless Beyond the Hype (goto Copenhagen) late-2018
+
+Overview of the Serverless landscape for Kubernetes, OpenFaaS and OpenFaaS Cloud with live demos and most update information. [View on Android or iPhone](https://gotocph.com/2018/sessions/592)
+
+### The Cube interview @ DevNet Create mid-2018
 
 * [2018 update on the OpenFaaS story](https://www.youtube.com/watch?v=J8UYZ1GXNTQ)
 
-### SkillsMatter video presentation 2017
+### TechFieldDay presentation (Dockercon EU) late-2017
 
-Overview of OpenFaaS features, users and roadmap
+15 minute overview with demos on Kubernetes and with Alexa - [HD YouTube video](https://www.youtube.com/watch?v=C3agSKv2s_w&list=PLlIapFDp305AiwA17mUNtgi5-u23eHm5j&index=1)
 
-* [HD Video](https://skillsmatter.com/skillscasts/10813-faas-and-furious-0-to-serverless-in-60-seconds-anywhere)
-
-### OpenFaaS presents to CNCF Serverless workgroup
-
-* [Video and blog post](https://blog.alexellis.io/openfaas-cncf-workgroup/)
-
-### Closing Keynote at Dockercon 2017
+### Closing Keynote at Dockercon early-2017
 
 Functions as a Service or FaaS was a winner in the Cool Hacks contest for Dockercon 2017.
 

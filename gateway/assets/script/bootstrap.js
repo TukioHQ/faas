@@ -2,7 +2,7 @@
 // Copyright (c) Alex Ellis 2017. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-var app = angular.module('faasGateway', ['ngMaterial', 'faasGateway.funcStore']);
+var app = angular.module('faasGateway', ['ngMaterial', 'ngMessages', 'faasGateway.funcStore']);
 
 app.controller("home", ['$scope', '$log', '$http', '$location', '$interval', '$filter', '$mdDialog', '$mdToast', '$mdSidenav',
     function($scope, $log, $http, $location, $interval, $filter, $mdDialog, $mdToast, $mdSidenav) {
@@ -180,17 +180,17 @@ app.controller("home", ['$scope', '$log', '$http', '$location', '$interval', '$f
                 });
         };
 
-        var refreshData = function() {
+        var refreshData = function () {
             var previous = $scope.functions;
 
-            var cl = function(previousItems) {
-                $http.get("../system/functions").then(function(response) {
+            var cl = function (previousItems) {
+                $http.get("../system/functions").then(function (response) {
                     if (response && response.data) {
                         if (previousItems.length != response.data.length) {
                             $scope.functions = response.data;
-                            
+
                             // update the selected function object because the newly fetched object from the API becomes a different object
-                            var filteredSelectedFunction = $filter('filter')($scope.functions, {name: $scope.selectedFunction.name}, true);
+                            var filteredSelectedFunction = $filter('filter')($scope.functions, { name: $scope.selectedFunction.name }, true);
                             if (filteredSelectedFunction && filteredSelectedFunction.length > 0) {
                                 $scope.selectedFunction = filteredSelectedFunction[0];
                             } else {
@@ -200,6 +200,7 @@ app.controller("home", ['$scope', '$log', '$http', '$location', '$interval', '$f
                             for (var i = 0; i < $scope.functions.length; i++) {
                                 for (var j = 0; j < response.data.length; j++) {
                                     if ($scope.functions[i].name == response.data[j].name) {
+                                        $scope.functions[i].image = response.data[j].image;
                                         $scope.functions[i].replicas = response.data[j].replicas;
                                         $scope.functions[i].invocationCount = response.data[j].invocationCount;
                                     }
